@@ -21,20 +21,29 @@ export default async (req, res) => {
     border_radius,
     border_color,
     show_owner,
+    hide_border,
   } = req.query;
 
   res.setHeader("Content-Type", "image/svg+xml");
 
   if (locale && !isLocaleAvailable(locale)) {
-    return res.send(renderError("Something went wrong", "Language not found"));
+    return res.send(
+      renderError("Something went wrong", "Language not found", {
+        title_color,
+        text_color,
+        bg_color,
+        border_color,
+        theme,
+      }),
+    );
   }
 
   try {
     const gistData = await fetchGist(id);
 
     let cacheSeconds = clampValue(
-      parseInt(cache_seconds || CONSTANTS.FOUR_HOURS, 10),
-      CONSTANTS.FOUR_HOURS,
+      parseInt(cache_seconds || CONSTANTS.SIX_HOURS, 10),
+      CONSTANTS.SIX_HOURS,
       CONSTANTS.ONE_DAY,
     );
     cacheSeconds = process.env.CACHE_SECONDS
@@ -51,7 +60,7 @@ export default async (req, res) => {
     const isBothOver1K = stars > 1000 && forks > 1000;
     const isBothUnder1 = stars < 1 && forks < 1;
     if (!cache_seconds && (isBothOver1K || isBothUnder1)) {
-      cacheSeconds = CONSTANTS.FOUR_HOURS;
+      cacheSeconds = CONSTANTS.SIX_HOURS;
     }
 
     res.setHeader(
@@ -72,10 +81,24 @@ export default async (req, res) => {
         border_color,
         locale: locale ? locale.toLowerCase() : null,
         show_owner: parseBoolean(show_owner),
+        hide_border: parseBoolean(hide_border),
       }),
     );
   } catch (err) {
-    res.setHeader("Cache-Control", `no-cache, no-store, must-revalidate`); // Don't cache error responses.
-    return res.send(renderError(err.message, err.secondaryMessage));
+    res.setHeader(
+      "Cache-Control",
+      `max-age=${CONSTANTS.ERROR_CACHE_SECONDS / 2}, s-maxage=${
+        CONSTANTS.ERROR_CACHE_SECONDS
+      }, stale-while-revalidate=${CONSTANTS.ONE_DAY}`,
+    ); // Use lower cache period for errors.
+    return res.send(
+      renderError(err.message, err.secondaryMessage, {
+        title_color,
+        text_color,
+        bg_color,
+        border_color,
+        theme,
+      }),
+    );
   }
 };
